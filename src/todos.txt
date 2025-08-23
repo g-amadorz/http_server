@@ -1,0 +1,8 @@
+What I need:
+
+1. I will use TCP and stream sockets.
+2. Need to bind my socket
+3. 3. 3. 
+
+
+
