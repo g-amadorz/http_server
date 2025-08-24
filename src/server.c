@@ -4,7 +4,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-#define PORT "8080"
+#define PORT "3455"
 #define BACKLOG 10
 
 int main() {
@@ -36,10 +36,13 @@ int main() {
 
   listen(socketfd, BACKLOG);
 
-  addr_size = sizeof their_addr;
-  new_fd = accept(socketfd, (struct sockaddr *)&their_addr, &addr_size);
+  while (1) {
+    addr_size = sizeof their_addr;
+    new_fd = accept(socketfd, (struct sockaddr *)&their_addr, &addr_size);
 
-  char *msg = "Morris Rocks!";
+    char *msg = "Morris Rocks!\n";
 
-  bytes_sent = send(new_fd, msg, strlen(msg), 0);
+    bytes_sent = send(new_fd, msg, strlen(msg), 0);
+    printf("Bytes sent: %d\n", bytes_sent);
+  }
 }
