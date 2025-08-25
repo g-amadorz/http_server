@@ -49,6 +49,9 @@ int main() {
     char address_buffer[100];
     getnameinfo((struct sockaddr *)&client_address, addr_size, address_buffer,
                 sizeof(address_buffer), 0, 0, NI_NUMERICHOST);
+
+    printf("New connection from: %s", address_buffer);
+
     int pid = fork();
 
     if (pid == 0) {
