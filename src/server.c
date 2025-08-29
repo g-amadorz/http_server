@@ -1,21 +1,49 @@
 #include "../headers/server.h"
 #include "../headers/http.h"
+#include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 #define PORT "80"
 #define BACKLOG 10
 
-void handle_client_connection() { return; }
+void receive_client(int listener_fd, struct pollfd **pfds, int *pfds_count,
+                    int *pfds_size) {
 
-void receive_client() {}
+  struct sockaddr_storage *addr;
+  socklen_t sock_size;
+
+  int client = accept(listener_fd, (struct sockaddr *)addr, &sock_size);
+
+  if (client < 0) {
+    perror("client refused connection");
+  }
+}
 
 void drop_client() {}
+
+void add_pfd(int fd, struct pollfd **pfds, int *pfds_count, int *pfds_size) {
+  if (*pfds_count == *pfds_size) {
+    pfds = realloc(*pfds, 2 * (*pfds_count) * sizeof(struct pollfd));
+  }
+
+  (*pfds)[*pfds_count].fd = fd;
+  (*pfds)[*pfds_count].events = POLLIN;
+  (*pfds)[*pfds_count].revents = 0;
+
+  (*pfds_count)++;
+}
+
+void drop_pfd(int fd_index, struct pollfd **pfds, int *pfds_count) {
+  (*pfds)[fd_index] = (*pfds)[*pfds_count - 1];
+  (*pfds_count)--;
+}
 
 int get_listener_socket() {
   struct addrinfo hints, *ai, *temp;
