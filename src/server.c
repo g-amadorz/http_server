@@ -13,21 +13,6 @@
 #define PORT "80"
 #define BACKLOG 10
 
-void receive_client(int listener_fd, struct pollfd **pfds, int *pfds_count,
-                    int *pfds_size) {
-
-  struct sockaddr_storage *addr;
-  socklen_t sock_size;
-
-  int client = accept(listener_fd, (struct sockaddr *)addr, &sock_size);
-
-  if (client < 0) {
-    perror("client refused connection");
-  }
-}
-
-void drop_client() {}
-
 void add_pfd(int fd, struct pollfd **pfds, int *pfds_count, int *pfds_size) {
   if (*pfds_count == *pfds_size) {
     pfds = realloc(*pfds, 2 * (*pfds_count) * sizeof(struct pollfd));
@@ -88,4 +73,58 @@ int get_listener_socket() {
   return listener_fd;
 }
 
-int main(int argc, char *argv[]) { return EXIT_SUCCESS; }
+void receive_client(int listener_fd, struct pollfd **pfds, int *pfds_count,
+                    int *pfds_size) {
+
+  struct sockaddr_storage *addr;
+  socklen_t sock_size;
+
+  int client = accept(listener_fd, (struct sockaddr *)addr, &sock_size);
+
+  if (client < 0) {
+    perror("client refused connection");
+  }
+
+  add_pfd(client, pfds, pfds_count, pfds_size);
+}
+
+void handle_client_request() {}
+
+void process_clients(int listener_fd, struct pollfd **pfds, int *pfds_count,
+                     int *pfds_size) {
+
+  // Poll for new connections
+  for (int i = 0; i < *pfds_count; i++) {
+
+    if ((*pfds)[i].revents & POLLIN) {
+      if ((*pfds)[i].fd == listener_fd) {
+        receive_client(listener_fd, pfds, pfds_count, pfds_size);
+      } else {
+        handle_client_request();
+      }
+    }
+  }
+}
+
+int main(int argc, char *argv[]) {
+  int listener_fd = get_listener_socket();
+
+  int pfds_size = 10;
+
+  struct pollfd *pfds = malloc(pfds_size * sizeof(struct pollfd));
+
+  int pfds_count = 0;
+
+  add_pfd(listener_fd, &pfds, &pfds_count, &pfds_size);
+
+  while (1) {
+    int polling = poll(pfds, pfds_count, -1);
+
+    if (polling) {
+      perror("poll() failed");
+      exit(1);
+    }
+
+    process_clients(listener_fd, &pfds, &pfds_count, &pfds_size);
+  }
+}
