@@ -1,6 +1,5 @@
 #include "../headers/server.h"
 #include "../headers/http.h"
-#include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -88,7 +87,9 @@ void receive_client(int listener_fd, struct pollfd **pfds, int *pfds_count,
   add_pfd(client, pfds, pfds_count, pfds_size);
 }
 
-void handle_client_request() {}
+void handle_client_request(int listener_fd, int client_fd) {
+  char response[256];
+}
 
 void process_clients(int listener_fd, struct pollfd **pfds, int *pfds_count,
                      int *pfds_size) {
@@ -120,7 +121,7 @@ int main(int argc, char *argv[]) {
   while (1) {
     int polling = poll(pfds, pfds_count, -1);
 
-    if (polling) {
+    if (polling == -1) {
       perror("poll() failed");
       exit(1);
     }
