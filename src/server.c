@@ -90,10 +90,7 @@ void receive_client(int listener_fd, struct pollfd **pfds, int *pfds_count,
 }
 
 void handle_client_request(int listener_fd, int client_fd,
-                           char *resource_path) {
-
-  http_response response = build_response(resource_path, client_fd);
-}
+                           char *resource_path) {}
 
 void process_clients(int listener_fd, struct pollfd **pfds, int *pfds_count,
                      int *pfds_size, char *resource_path) {
@@ -113,7 +110,7 @@ void process_clients(int listener_fd, struct pollfd **pfds, int *pfds_count,
 
 int main(int argc, char *argv[]) {
 
-  char *path = "index/file.html";
+  char *path = "./files/index.html";
 
   int listener_fd = get_listener_socket();
 

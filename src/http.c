@@ -39,4 +39,8 @@ const char *get_content_type(const char *path) {
   return "application/octet-stream";
 }
 
-http_response build_response(char *path, int client_fd) {}
+http_response build_200_response() {}
+
+http_response build_400_response() {}
+
+http_response build_404_response() {}
