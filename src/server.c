@@ -1,5 +1,6 @@
-#include "../headers/server.h"
+// #include "../headers/server.h"
 #include "../headers/http.h"
+#include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -57,12 +58,12 @@ int get_listener_socket() {
   }
 
   if (temp == NULL) {
-    fprintf(stderr, "No socket available");
+    fprintf(stderr, "No socket available", errno);
     exit(1);
   }
 
   if (listen(listener_fd, BACKLOG)) {
-    fprintf(stderr, "Socket unable to listen");
+    fprintf(stderr, "Socket unable to listen", errno);
     exit(1);
   }
 
@@ -82,17 +83,20 @@ void receive_client(int listener_fd, struct pollfd **pfds, int *pfds_count,
 
   if (client < 0) {
     perror("client refused connection");
+    exit(1);
   }
 
   add_pfd(client, pfds, pfds_count, pfds_size);
 }
 
-void handle_client_request(int listener_fd, int client_fd) {
-  char response[256];
+void handle_client_request(int listener_fd, int client_fd,
+                           char *resource_path) {
+
+  http_response response = build_response(resource_path, client_fd);
 }
 
 void process_clients(int listener_fd, struct pollfd **pfds, int *pfds_count,
-                     int *pfds_size) {
+                     int *pfds_size, char *resource_path) {
 
   // Poll for new connections
   for (int i = 0; i < *pfds_count; i++) {
@@ -101,13 +105,16 @@ void process_clients(int listener_fd, struct pollfd **pfds, int *pfds_count,
       if ((*pfds)[i].fd == listener_fd) {
         receive_client(listener_fd, pfds, pfds_count, pfds_size);
       } else {
-        handle_client_request();
+        handle_client_request(listener_fd, (*pfds)[i].fd, resource_path);
       }
     }
   }
 }
 
 int main(int argc, char *argv[]) {
+
+  char *path = "index/file.html";
+
   int listener_fd = get_listener_socket();
 
   int pfds_size = 10;
@@ -126,6 +133,6 @@ int main(int argc, char *argv[]) {
       exit(1);
     }
 
-    process_clients(listener_fd, &pfds, &pfds_count, &pfds_size);
+    process_clients(listener_fd, &pfds, &pfds_count, &pfds_size, path);
   }
 }
