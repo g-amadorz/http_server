@@ -20,6 +20,8 @@ struct http_response {
   size_t body_length;
 };
 
-http_response build_response(char *path, int client_fd);
-
 const char *get_content_type(const char *path);
+
+void send_200_response(int client);
+void send_400_response(int client);
+void send_404_response(int client);

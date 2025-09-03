@@ -89,9 +89,29 @@ void receive_client(int listener_fd, struct pollfd **pfds, int *pfds_count,
   add_pfd(client, pfds, pfds_count, pfds_size);
 }
 
-void handle_client_request(int listener_fd, int client_fd,
-                           char *resource_path) {}
+void drop_client(int client_i, struct pollfd **pfds, int *pfds_count) {
+  close((*pfds)[client_i].fd);
+  drop_pfd(client_i, pfds, pfds_count);
+}
 
+void handle_client_request(int listener_fd, int client_fd,
+                           char *resource_path) {
+
+  if (!strstr(resource_path, "/")) {
+    fprintf(stderr, "error no such file");
+
+    send_400_response();
+  }
+
+  FILE *file = fopen(resource_path, "r");
+
+  if (!file) {
+    perror("File opening failed");
+    send_404_response();
+  }
+
+  send_200_response();
+}
 void process_clients(int listener_fd, struct pollfd **pfds, int *pfds_count,
                      int *pfds_size, char *resource_path) {
 
@@ -108,7 +128,7 @@ void process_clients(int listener_fd, struct pollfd **pfds, int *pfds_count,
   }
 }
 
-int main(int argc, char *argv[]) {
+int main() {
 
   char *path = "./files/index.html";
 
