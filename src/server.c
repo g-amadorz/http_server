@@ -1,5 +1,4 @@
-// #include "../headers/server.h"
-#include "../headers/http.h"
+#include "../headers/server.h"
 #include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -94,62 +93,59 @@ void drop_client(int client_i, struct pollfd **pfds, int *pfds_count) {
   drop_pfd(client_i, pfds, pfds_count);
 }
 
-void handle_client_request(int listener_fd, int client_fd,
-                           char *resource_path) {
+void send_400_response(int client) {
+  const char *response = "HTTP/1.1 400 Bad Request\r\n"
+                         "Content-Type: text/plain\r\n"
+                         "Content-Length: 11\r\n"
+                         "Connection: close\r\n"
+                         "\r\n"
+                         "Bad Request";
+
+  send(client, response, strlen(response), 0);
+}
+
+void send_404_response(int client) {
+  const char *response = "HTTP/1.1 404 Not Found\r\n"
+                         "Content-Type: text/plain"
+                         "Content-Length: 9\r\n"
+                         "\r\n"
+                         "Not Found";
+  send(client, response, strlen(response), 0);
+}
+
+void send_200_response(int client, FILE file) {}
+
+void handle_client_request(int server, int client_i, struct pollfd **pfds,
+                           int *pfds_count, char *resource_path) {
+
+  int client = (*pfds)[client_i].fd;
 
   if (!strstr(resource_path, "/")) {
     fprintf(stderr, "error no such file");
-
-    send_400_response();
+    send_400_response(client);
+    drop_client(client_i, pfds, pfds_count);
   }
 
   FILE *file = fopen(resource_path, "r");
 
   if (!file) {
     perror("File opening failed");
-    send_404_response();
+    send_404_response(client);
+    drop_client(client_i, pfds, pfds_count);
   }
-
-  send_200_response();
 }
-void process_clients(int listener_fd, struct pollfd **pfds, int *pfds_count,
-                     int *pfds_size, char *resource_path) {
 
+void process_clients(int server, struct pollfd **pfds, int *pfds_count,
+                     int *pfds_size, char *resource_path) {
   // Poll for new connections
   for (int i = 0; i < *pfds_count; i++) {
 
     if ((*pfds)[i].revents & POLLIN) {
-      if ((*pfds)[i].fd == listener_fd) {
-        receive_client(listener_fd, pfds, pfds_count, pfds_size);
+      if ((*pfds)[i].fd == server) {
+        receive_client(server, pfds, pfds_count, pfds_size);
       } else {
-        handle_client_request(listener_fd, (*pfds)[i].fd, resource_path);
+        handle_client_request(server, i, pfds, pfds_count, resource_path);
       }
     }
-  }
-}
-
-int main() {
-
-  char *path = "./files/index.html";
-
-  int listener_fd = get_listener_socket();
-
-  int pfds_size = 10;
-
-  struct pollfd *pfds = malloc(pfds_size * sizeof(struct pollfd));
-
-  int pfds_count = 0;
-
-  add_pfd(listener_fd, &pfds, &pfds_count, &pfds_size);
-
-  while (1) {
-    int polling = poll(pfds, pfds_count, -1);
-
-    if (polling == -1) {
-      perror("poll() failed");
-      exit(1);
-    }
-
-    process_clients(listener_fd, &pfds, &pfds_count, &pfds_size, path);
   }
 }
