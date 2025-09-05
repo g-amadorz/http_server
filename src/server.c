@@ -1,7 +1,9 @@
 #include "../headers/server.h"
+#include "../headers/http.h"
 #include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,6 +13,7 @@
 
 #define PORT "80"
 #define BACKLOG 10
+#define P_SIZE 1024
 
 void add_pfd(int fd, struct pollfd **pfds, int *pfds_count, int *pfds_size) {
   if (*pfds_count == *pfds_size) {
@@ -105,15 +108,51 @@ void send_400_response(int client) {
 }
 
 void send_404_response(int client) {
-  const char *response = "HTTP/1.1 404 Not Found\r\n"
-                         "Content-Type: text/plain"
-                         "Content-Length: 9\r\n"
-                         "\r\n"
-                         "Not Found";
-  send(client, response, strlen(response), 0);
+  const char *payload = "HTTP/1.1 404 Not Found\r\n"
+                        "Content-Type: text/plain"
+                        "Content-Length: 9\r\n"
+                        "Connection: close\r\n"
+                        "\r\n"
+                        "Not Found";
+  send(client, payload, strlen(payload), 0);
 }
 
-void send_200_response(int client, FILE file) {}
+void send_200_response(int client, FILE *file, const char *content_type) {
+  char payload[P_SIZE];
+
+  if (fseek(file, 0L, SEEK_END) != 0) {
+    perror("fseek()");
+    exit(1);
+  }
+
+  size_t file_size = ftell(file);
+
+  rewind(file);
+
+  sprintf(payload, "HTTP/1.1 200 OK\r\n");
+
+  send(client, payload, strlen(payload), 0);
+
+  sprintf(payload, "Content-Type: %s\r\n", content_type);
+
+  send(client, payload, strlen(payload), 0);
+
+  sprintf(payload, "Content-Length: %zu\r\n", file_size);
+
+  send(client, payload, strlen(payload), 0);
+
+  sprintf(payload, "Connection: close\r\n");
+
+  send(client, payload, strlen(payload), 0);
+
+  int r = fread(payload, 1, P_SIZE, file);
+  while (r) {
+    send(client, payload, r, 0);
+    r = fread(payload, 1, P_SIZE, file);
+  }
+
+  fclose(file);
+}
 
 void handle_client_request(int server, int client_i, struct pollfd **pfds,
                            int *pfds_count, char *resource_path) {
@@ -133,6 +172,9 @@ void handle_client_request(int server, int client_i, struct pollfd **pfds,
     send_404_response(client);
     drop_client(client_i, pfds, pfds_count);
   }
+
+  const char *content_type = get_content_type(resource_path);
+  send_200_response(client, file, content_type);
 }
 
 void process_clients(int server, struct pollfd **pfds, int *pfds_count,
