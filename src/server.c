@@ -75,6 +75,7 @@ const char *get_content_type(const char *path) {
 void add_pfd(int fd, struct pollfd **pfds, int *pfds_count, int *pfds_size) {
   if (*pfds_count == *pfds_size) {
     *pfds = realloc(*pfds, 2 * (*pfds_count) * sizeof(struct pollfd));
+    *pfds_size *= 2;
   }
 
   (*pfds)[*pfds_count].fd = fd;
@@ -142,10 +143,9 @@ void receive_client(int listener_fd, struct pollfd **pfds, int *pfds_count,
                     int *pfds_size) {
 
   struct sockaddr_storage addr;
-  socklen_t sock_size;
   char remoteIP[INET6_ADDRSTRLEN];
 
-  socklen_t adrlen = sizeof addr;
+  socklen_t sock_size = sizeof addr;
 
   int client = accept(listener_fd, (struct sockaddr *)&addr, &sock_size);
 
@@ -213,6 +213,10 @@ void send_200_response(int client, FILE *file, const char *content_type) {
 
   send(client, payload, strlen(payload), 0);
 
+  sprintf(payload, "\r\n");
+
+  send(client, payload, strlen(payload), 0);
+
   int r = fread(payload, 1, P_SIZE, file);
   while (r) {
     send(client, payload, r, 0);
@@ -233,7 +237,7 @@ void handle_client_request(int server, int client_i, struct pollfd **pfds,
     drop_client(client_i, pfds, pfds_count);
   }
 
-  FILE *file = fopen(resource_path, "r");
+  FILE *file = fopen(resource_path, "rb");
 
   if (!file) {
     perror("File opening failed");
