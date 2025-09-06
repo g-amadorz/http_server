@@ -1,5 +1,7 @@
 #include "../headers/server.h"
 #include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 int main() {
 
@@ -16,12 +18,17 @@ int main() {
   pfds[0].fd = server;
   pfds[0].events = POLL_IN;
 
+  ++pfds_count;
+
   while (1) {
     int polling = poll(pfds, pfds_count, -1);
 
     if (polling == -1) {
+      perror("poll()");
       exit(1);
     }
     process_clients(server, &pfds, &pfds_count, &pfds_size, path);
   }
+
+  free(pfds);
 }

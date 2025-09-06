@@ -1,5 +1,4 @@
-#include "../headers/server.h"
-#include "../headers/http.h"
+#include <arpa/inet.h>
 #include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -11,13 +10,71 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define PORT "80"
+#define PORT "8080"
 #define BACKLOG 10
 #define P_SIZE 1024
 
+const char *inet_ntop2(void *addr, char *buf, size_t size) {
+  struct sockaddr_storage *sas = addr;
+  struct sockaddr_in *sa4;
+  struct sockaddr_in6 *sa6;
+  void *src;
+
+  switch (sas->ss_family) {
+  case AF_INET:
+    sa4 = addr;
+    src = &(sa4->sin_addr);
+    break;
+  case AF_INET6:
+    sa6 = addr;
+    src = &(sa6->sin6_addr);
+    break;
+  default:
+    return NULL;
+  }
+
+  return inet_ntop(sas->ss_family, src, buf, size);
+}
+
+const char *get_content_type(const char *path) {
+  const char *last_dot = strrchr(path, '.');
+  if (last_dot) {
+    if (strcmp(last_dot, ".css") == 0)
+      return "text/css";
+    if (strcmp(last_dot, ".csv") == 0)
+      return "text/csv";
+    if (strcmp(last_dot, ".gif") == 0)
+      return "image/gif";
+    if (strcmp(last_dot, ".htm") == 0)
+      return "text/html";
+    if (strcmp(last_dot, ".html") == 0)
+      return "text/html";
+    if (strcmp(last_dot, ".ico") == 0)
+      return "image/x-icon";
+    if (strcmp(last_dot, ".jpeg") == 0)
+      return "image/jpeg";
+    if (strcmp(last_dot, ".jpg") == 0)
+      return "image/jpeg";
+    if (strcmp(last_dot, ".js") == 0)
+      return "application/javascript";
+    if (strcmp(last_dot, ".json") == 0)
+      return "application/json";
+    if (strcmp(last_dot, ".png") == 0)
+      return "image/png";
+    if (strcmp(last_dot, ".pdf") == 0)
+      return "application/pdf";
+    if (strcmp(last_dot, ".svg") == 0)
+      return "image/svg+xml";
+    if (strcmp(last_dot, ".txt") == 0)
+      return "text/plain";
+  }
+
+  return "application/octet-stream";
+}
+
 void add_pfd(int fd, struct pollfd **pfds, int *pfds_count, int *pfds_size) {
   if (*pfds_count == *pfds_size) {
-    pfds = realloc(*pfds, 2 * (*pfds_count) * sizeof(struct pollfd));
+    *pfds = realloc(*pfds, 2 * (*pfds_count) * sizeof(struct pollfd));
   }
 
   (*pfds)[*pfds_count].fd = fd;
@@ -42,17 +99,24 @@ int get_listener_socket() {
   hints.ai_flags = AI_PASSIVE;
 
   if (getaddrinfo(NULL, PORT, &hints, &ai)) {
-    fprintf(stderr, "getaddrinfo() from listener failed");
+    fprintf(stderr, "getaddrinfo() from listener failed\n", errno);
     exit(1);
   }
 
-  for (temp = ai; temp != NULL; temp = temp->ai_next) {
-    listener_fd = socket(temp->ai_family, temp->ai_socktype, 0);
+  temp = ai;
+
+  while (temp) {
+
+    listener_fd = socket(temp->ai_family, temp->ai_socktype, temp->ai_protocol);
+
     if (listener_fd < 0) {
+      temp = temp->ai_next;
       continue;
     }
 
     if (bind(listener_fd, temp->ai_addr, temp->ai_addrlen)) {
+      close(listener_fd);
+      temp = temp->ai_next;
       continue;
     }
 
@@ -60,17 +124,16 @@ int get_listener_socket() {
   }
 
   if (temp == NULL) {
-    fprintf(stderr, "No socket available", errno);
+    printf("No socket available\n");
     exit(1);
   }
 
   if (listen(listener_fd, BACKLOG)) {
-    fprintf(stderr, "Socket unable to listen", errno);
+    fprintf(stderr, "Socket unable to listen\n", errno);
     exit(1);
   }
 
   freeaddrinfo(ai);
-  freeaddrinfo(temp);
 
   return listener_fd;
 }
@@ -78,10 +141,13 @@ int get_listener_socket() {
 void receive_client(int listener_fd, struct pollfd **pfds, int *pfds_count,
                     int *pfds_size) {
 
-  struct sockaddr_storage *addr;
+  struct sockaddr_storage addr;
   socklen_t sock_size;
+  char remoteIP[INET6_ADDRSTRLEN];
 
-  int client = accept(listener_fd, (struct sockaddr *)addr, &sock_size);
+  socklen_t adrlen = sizeof addr;
+
+  int client = accept(listener_fd, (struct sockaddr *)&addr, &sock_size);
 
   if (client < 0) {
     perror("client refused connection");
@@ -89,6 +155,8 @@ void receive_client(int listener_fd, struct pollfd **pfds, int *pfds_count,
   }
 
   add_pfd(client, pfds, pfds_count, pfds_size);
+  printf("pollserver: new connection from %s on socket %d\n",
+         inet_ntop2(&addr, remoteIP, sizeof remoteIP), client);
 }
 
 void drop_client(int client_i, struct pollfd **pfds, int *pfds_count) {
@@ -109,7 +177,7 @@ void send_400_response(int client) {
 
 void send_404_response(int client) {
   const char *payload = "HTTP/1.1 404 Not Found\r\n"
-                        "Content-Type: text/plain"
+                        "Content-Type: text/plain\r\n"
                         "Content-Length: 9\r\n"
                         "Connection: close\r\n"
                         "\r\n"
@@ -182,7 +250,7 @@ void process_clients(int server, struct pollfd **pfds, int *pfds_count,
   // Poll for new connections
   for (int i = 0; i < *pfds_count; i++) {
 
-    if ((*pfds)[i].revents & POLLIN) {
+    if ((*pfds)[i].revents & (POLLIN | POLLHUP)) {
       if ((*pfds)[i].fd == server) {
         receive_client(server, pfds, pfds_count, pfds_size);
       } else {
