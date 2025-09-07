@@ -1,9 +1,14 @@
 #include "../headers/server.h"
+#include "../headers/utils.h"
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 int main() {
+
+  signal(SIGPIPE, signal_callback_handler);
+
+  // sigaction(SIGPIPE, &(struct sigaction){SIG_IGN}, NULL);
 
   char *path = "./files/index.html";
 

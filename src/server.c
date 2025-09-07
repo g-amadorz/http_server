@@ -100,7 +100,7 @@ int get_listener_socket() {
   hints.ai_flags = AI_PASSIVE;
 
   if (getaddrinfo(NULL, PORT, &hints, &ai)) {
-    fprintf(stderr, "getaddrinfo() from listener failed\n", errno);
+    perror("getaddrinfo()");
     exit(1);
   }
 
@@ -115,7 +115,7 @@ int get_listener_socket() {
       continue;
     }
 
-    if (bind(listener_fd, temp->ai_addr, temp->ai_addrlen)) {
+    if (bind(listener_fd, temp->ai_addr, temp->ai_addrlen) < 0) {
       close(listener_fd);
       temp = temp->ai_next;
       continue;
@@ -130,7 +130,7 @@ int get_listener_socket() {
   }
 
   if (listen(listener_fd, BACKLOG)) {
-    fprintf(stderr, "Socket unable to listen\n", errno);
+    perror("listen()");
     exit(1);
   }
 
@@ -165,14 +165,16 @@ void drop_client(int client_i, struct pollfd **pfds, int *pfds_count) {
 }
 
 void send_400_response(int client) {
-  const char *response = "HTTP/1.1 400 Bad Request\r\n"
-                         "Content-Type: text/plain\r\n"
-                         "Content-Length: 11\r\n"
-                         "Connection: close\r\n"
-                         "\r\n"
-                         "Bad Request";
+  const char *payload = "HTTP/1.1 400 Bad Request\r\n"
+                        "Content-Type: text/plain\r\n"
+                        "Content-Length: 11\r\n"
+                        "Connection: close\r\n"
+                        "\r\n"
+                        "Bad Request";
 
-  send(client, response, strlen(response), 0);
+  if (send(client, payload, strlen(payload), 0) <= 0) {
+    perror("send failed in 400 response");
+  }
 }
 
 void send_404_response(int client) {
@@ -182,7 +184,10 @@ void send_404_response(int client) {
                         "Connection: close\r\n"
                         "\r\n"
                         "Not Found";
-  send(client, payload, strlen(payload), 0);
+
+  if (send(client, payload, strlen(payload), 0) <= 0) {
+    perror("send failed in 404 response");
+  }
 }
 
 void send_200_response(int client, FILE *file, const char *content_type) {
@@ -222,8 +227,6 @@ void send_200_response(int client, FILE *file, const char *content_type) {
     send(client, payload, r, 0);
     r = fread(payload, 1, P_SIZE, file);
   }
-
-  fclose(file);
 }
 
 void handle_client_request(int server, int client_i, struct pollfd **pfds,
@@ -232,21 +235,26 @@ void handle_client_request(int server, int client_i, struct pollfd **pfds,
   int client = (*pfds)[client_i].fd;
 
   if (!strstr(resource_path, "/")) {
-    fprintf(stderr, "error no such file");
+    fprintf(stderr, "Invalid path format: %s\n", resource_path);
+    perror("Error no such file");
     send_400_response(client);
     drop_client(client_i, pfds, pfds_count);
+    return;
   }
 
   FILE *file = fopen(resource_path, "rb");
 
   if (!file) {
-    perror("File opening failed");
+    perror("fopen");
+    fprintf(stderr, "Failed to open file: %s\n", resource_path);
     send_404_response(client);
     drop_client(client_i, pfds, pfds_count);
+    return;
   }
 
   const char *content_type = get_content_type(resource_path);
   send_200_response(client, file, content_type);
+  fclose(file);
 }
 
 void process_clients(int server, struct pollfd **pfds, int *pfds_count,
